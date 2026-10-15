@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#dba835" />
+      <stop offset="50%" stop-color="#c8902a" />
+      <stop offset="100%" stop-color="#8a501e" />
+    </linearGradient>
+    <linearGradient id="darkBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#18191c" />
+      <stop offset="100%" stop-color="#0b0c0e" />
+    </linearGradient>
+  </defs>
+  <!-- Background rounded badge -->
+  <rect width="64" height="64" rx="16" fill="url(#darkBg)" />
+  <rect x="1" y="1" width="62" height="62" rx="15" stroke="url(#goldGrad)" stroke-width="2" />
+  
+  <!-- Camera Body -->
+  <path d="M22 22L24.5 17H39.5L42 22H49C50.6569 22 52 23.3431 52 25V45C52 46.6569 50.6569 48 49 48H15C13.3431 48 12 46.6569 12 45V25C12 23.3431 13.3431 22 15 22H22Z" fill="none" stroke="url(#goldGrad)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+  
+  <!-- Camera Lens Outer Ring -->
+  <circle cx="32" cy="35" r="9" stroke="url(#goldGrad)" stroke-width="3" fill="#18191c" />
+  
+  <!-- Camera Lens Inner Shutter Glow -->
+  <circle cx="32" cy="35" r="4.5" fill="url(#goldGrad)" />
+  
+  <!-- Flash Dot -->
+  <circle cx="44" cy="27" r="2" fill="url(#goldGrad)" />
+</svg>
+
