@@ -5,13 +5,13 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowUpRight } from "lucide-react";
 import { SectionHeading } from "@/components/ui/SectionHeading";
-import { galleryItems } from "@/lib/data";
+import { useSiteContent } from "@/components/providers/SiteContentProvider";
 import { useLanguage } from "@/components/providers/LanguageProvider";
-
-const featured = galleryItems.slice(0, 6);
 
 export function FeaturedWork() {
   const { t } = useLanguage();
+  const { galleryItems } = useSiteContent();
+  const featured = galleryItems.slice(0, 6);
 
   return (
     <section className="py-24 md:py-32 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

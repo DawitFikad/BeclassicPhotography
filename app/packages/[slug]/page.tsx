@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { packages, getPackageById } from "@/lib/data";
-import { PackageDetailView } from "@/components/packages/PackageDetailView";
+import { PackageDetailDynamic } from "@/components/packages/PackageDetailDynamic";
 
 interface PageProps {
   params: {
@@ -37,16 +36,6 @@ export function generateMetadata({ params }: PageProps): Metadata {
 }
 
 export default function PackageDetailPage({ params }: PageProps) {
-  const pkg = getPackageById(params.slug);
-
-  if (!pkg) {
-    notFound();
-  }
-
-  const relatedPackages = (pkg.related || [])
-    .map((id) => packages.find((p) => p.id === id))
-    .filter(Boolean) as typeof packages;
-
-  return <PackageDetailView pkg={pkg} relatedPackages={relatedPackages} />;
+  return <PackageDetailDynamic slug={params.slug} />;
 }
 

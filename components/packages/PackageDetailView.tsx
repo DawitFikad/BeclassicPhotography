@@ -322,7 +322,7 @@ export function PackageDetailView({
                   </div>
 
                   <Link
-                    href={`/packages/${rel.id}`}
+          href={`/packages/detail?id=${encodeURIComponent(rel.id)}`}
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-gold-400/60 text-gold-300 hover:bg-gold-400 hover:text-on-gold font-semibold text-xs transition-all"
                   >
                     <span>{lang === "am" ? "ፓኬጁን ይመልከቱ" : "View Package"}</span>

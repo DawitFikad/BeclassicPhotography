@@ -4,30 +4,16 @@ import { useState } from "react";
 import Link from "next/link";
 import { Check, Crown, ArrowRight, Sparkles, FileText, PlusCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { packages, additionalServices, studioInfo } from "@/lib/data";
+import { useSiteContent } from "@/components/providers/SiteContentProvider";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { useLanguage } from "@/components/providers/LanguageProvider";
 
-type CategoryFilter =
-  | "All"
-  | "Studio & Landscape"
-  | "Ceremony Photo & Video"
-  | "Event Photography"
-  | "Special Event";
-
 export default function PackagesPage() {
   const { t, lang } = useLanguage();
-  const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("All");
-
-  const categories: CategoryFilter[] = [
-    "All",
-    "Studio & Landscape",
-    "Ceremony Photo & Video",
-    "Event Photography",
-    "Special Event",
-  ];
-
-  const categoryLabels: Record<CategoryFilter, string> = {
+  const { packages, additionalServices, packageCategories } = useSiteContent();
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const categories = ["All", ...packageCategories.map((category) => category.name)];
+  const categoryLabels: Record<string, string> = {
     All: lang === "am" ? "ሁሉም" : "All",
     "Studio & Landscape": t.packages.categoriesList.studio,
     "Ceremony Photo & Video": t.packages.categoriesList.ceremony,
@@ -36,7 +22,7 @@ export default function PackagesPage() {
   };
 
   const filteredPackages =
-    selectedCategory === "All"
+      selectedCategory === "All"
       ? packages
       : packages.filter((p) => p.category === selectedCategory);
 
@@ -72,7 +58,7 @@ export default function PackagesPage() {
                   : "border border-ink-800 bg-surface/80 text-ink-300 hover:border-gold-400/60 hover:text-gold-300"
               }`}
             >
-              {categoryLabels[cat]}
+              {categoryLabels[cat] || cat}
             </button>
           );
         })}
@@ -187,7 +173,7 @@ export default function PackagesPage() {
                   </Link>
 
                   <Link
-                    href={`/packages/${pkg.id}`}
+                    href={`/packages/detail?id=${encodeURIComponent(pkg.id)}`}
                     className="inline-flex items-center justify-center gap-1.5 text-xs text-ink-300 hover:text-gold-400 transition-colors py-1.5 font-medium group"
                   >
                     <span>{t.packages.viewDetails}</span>

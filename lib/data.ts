@@ -13,7 +13,7 @@ export interface GalleryItem {
   alt: string;
   title?: string;
   subtitle?: string;
-  category: GalleryCategory;
+  category: string;
   width: number;
   height: number;
 }
@@ -232,7 +232,7 @@ export const categories: ("All" | GalleryCategory)[] = [
 export interface Package {
   id: string;
   name: string;
-  category: "Studio & Landscape" | "Ceremony Photo & Video" | "Event Photography" | "Special Event";
+  category: string;
   serviceType: string;
   price: string;
   description: string;

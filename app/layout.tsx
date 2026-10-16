@@ -5,6 +5,7 @@ import { Footer } from "@/components/layout/Footer";
 import { FloatingButtons } from "@/components/layout/FloatingButtons";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { LanguageProvider } from "@/components/providers/LanguageProvider";
+import { SiteContentProvider } from "@/components/providers/SiteContentProvider";
 import { WebsiteBackground } from "@/components/layout/WebsiteBackground";
 
 export const metadata: Metadata = {
@@ -69,11 +70,13 @@ export default function RootLayout({
       <body className="min-h-screen bg-ink-950 text-ink-50 antialiased relative">
         <ThemeProvider>
           <LanguageProvider>
-            <WebsiteBackground />
-            <Navbar />
-            <main className="min-h-screen relative z-10">{children}</main>
-            <Footer />
-            <FloatingButtons />
+            <SiteContentProvider>
+              <WebsiteBackground />
+              <Navbar />
+              <main className="min-h-screen relative z-10">{children}</main>
+              <Footer />
+              <FloatingButtons />
+            </SiteContentProvider>
           </LanguageProvider>
         </ThemeProvider>
       </body>

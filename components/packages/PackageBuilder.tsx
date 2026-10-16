@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { studioInfo } from "@/lib/data";
+import { useSiteContent } from "@/components/providers/SiteContentProvider";
 import { Toast, type ToastMessage } from "@/components/ui/Toast";
 import { useLanguage } from "@/components/providers/LanguageProvider";
 
@@ -33,202 +34,13 @@ export type QuoteStyle = "classic" | "romance" | "olive";
 interface BuilderPackageItem {
   id: string;
   name: string;
-  category: "Wedding Packages" | "Ceremony Photo & Video" | "Special Event Packages" | "Additional Services";
+  category: string;
   price: string;
   priceNumber: number;
   subtitle: string;
   bullets: string[];
   image: string;
 }
-
-const BUILDER_PACKAGES: BuilderPackageItem[] = [
-  // 1. Wedding Packages
-  {
-    id: "studio-landscape-premium",
-    name: "Studio & Landscape Premium",
-    category: "Wedding Packages",
-    price: "85,000 birr",
-    priceNumber: 85000,
-    subtitle: "Complete premium package with signing board included",
-    bullets: [
-      "Two 30×60 Laminated Albums",
-      "Three Different Size Canvas Boards for Wall",
-      "One Signing Board OR Sign Book",
-    ],
-    image: "/images/wedding/wedding-1.jpg",
-  },
-  {
-    id: "studio-landscape-standard",
-    name: "Studio & Landscape Standard",
-    category: "Wedding Packages",
-    price: "70,000 birr",
-    priceNumber: 70000,
-    subtitle: "Quality package with essential photo products",
-    bullets: [
-      "Two 30×60 Laminated Albums",
-      "Three 50×50 Canvas Boards for Wall",
-    ],
-    image: "/images/wedding/wedding-2.jpg",
-  },
-  {
-    id: "landscape-package",
-    name: "Landscape Package",
-    category: "Wedding Packages",
-    price: "50,000 birr",
-    priceNumber: 50000,
-    subtitle: "Focused on beautiful outdoor photography",
-    bullets: [
-      "One 30×60 Laminated Album",
-      "Two 60×60 Canvas Boards for Wall",
-    ],
-    image: "/images/hero/hero-2.jpg",
-  },
-
-  // 2. Ceremony Photo & Video
-  {
-    id: "ceremony-with-drone",
-    name: "Ceremony Photo & Video (With Drone)",
-    category: "Ceremony Photo & Video",
-    price: "220,000 birr",
-    priceNumber: 220000,
-    subtitle: "Ultimate ceremony coverage with drone",
-    bullets: [
-      "One Full Day Coverage",
-      "Location: A.A",
-      "30×90 cm Album (15 pages)",
-    ],
-    image: "/images/hero/hero-4.jpg",
-  },
-  {
-    id: "ceremony-standard",
-    name: "Ceremony Photo & Video",
-    category: "Ceremony Photo & Video",
-    price: "170,000 birr",
-    priceNumber: 170000,
-    subtitle: "Complete ceremony coverage with premium quality",
-    bullets: [
-      "One Full Day Coverage",
-      "Location: A.A",
-      "30×90 cm Album (15 pages)",
-    ],
-    image: "/images/wedding/wedding-3.jpg",
-  },
-  {
-    id: "melse-kelekel-premium",
-    name: "Melse or Kelekel Premium",
-    category: "Ceremony Photo & Video",
-    price: "85,000 birr",
-    priceNumber: 85000,
-    subtitle: "Event-based package for one day coverage",
-    bullets: [
-      "Photo: 1 CAMERA",
-      "Video: 2 CAMERA",
-      "Album: 1 30X60 CM ALBUM",
-    ],
-    image: "/images/wedding/wedding-5.jpg",
-  },
-  {
-    id: "melse-kelekel-standard",
-    name: "Melse or Kelekel Standard",
-    category: "Ceremony Photo & Video",
-    price: "70,000 birr",
-    priceNumber: 70000,
-    subtitle: "Event-based package for one day coverage",
-    bullets: [
-      "Photo: 1 CAMERA",
-      "Video: 1 CAMERA",
-      "Album: 1 30X60 CM ALBUM",
-    ],
-    image: "/images/wedding/wedding-6.jpg",
-  },
-
-  // 3. Special Event Packages
-  {
-    id: "melse-special",
-    name: "MELSE",
-    category: "Special Event Packages",
-    price: "55,000 birr",
-    priceNumber: 55000,
-    subtitle: "Special event coverage package",
-    bullets: [
-      "Photo: 1 CAMERA",
-      "Video: 1 CAMERA",
-      "Album: 1 30X60",
-    ],
-    image: "/images/wedding/wedding-4.jpg",
-  },
-  {
-    id: "shimgelena-special",
-    name: "SHIMGELENA",
-    category: "Special Event Packages",
-    price: "55,000 birr",
-    priceNumber: 55000,
-    subtitle: "Special event coverage package",
-    bullets: [
-      "Photo: 1 CAMERA",
-      "Video: 1 CAMERA",
-      "Album: 1 30X60",
-    ],
-    image: "/images/wedding/wedding-7.jpg",
-  },
-  {
-    id: "pre-wedding-special",
-    name: "PRE WEDDING",
-    category: "Special Event Packages",
-    price: "40,000 birr",
-    priceNumber: 40000,
-    subtitle: "Special event coverage package",
-    bullets: [
-      "Photo: 1 CAMERA",
-      "Video: 1 CAMERA",
-      "Album: 1 30X60",
-    ],
-    image: "/images/hero/hero-3.jpg",
-  },
-  {
-    id: "kelkel-special",
-    name: "KELKEL",
-    category: "Special Event Packages",
-    price: "40,000 birr",
-    priceNumber: 40000,
-    subtitle: "Special event coverage package",
-    bullets: [
-      "Photo: 1 CAMERA",
-      "Video: 1 CAMERA",
-      "Album: 1 30X60",
-    ],
-    image: "/images/wedding/wedding-8.jpg",
-  },
-
-  // 4. Additional Services
-  {
-    id: "landscape-video-addon",
-    name: "LANDSCAPE VIDEO",
-    category: "Additional Services",
-    price: "25,000 birr",
-    priceNumber: 25000,
-    subtitle: "Additional service add-on",
-    bullets: ["Cinematic landscape video production"],
-    image: "/images/commercial/commercial-1.jpg",
-  },
-  {
-    id: "landscape-day-photoshoot-addon",
-    name: "LANDSCAPE DAY PHOTOSHOOT",
-    category: "Additional Services",
-    price: "20,000 birr",
-    priceNumber: 20000,
-    subtitle: "Additional service add-on",
-    bullets: ["Full day scenic outdoor photoshoot"],
-    image: "/images/commercial/commercial-2.png",
-  },
-];
-
-const CATEGORIES = [
-  "Wedding Packages",
-  "Ceremony Photo & Video",
-  "Special Event Packages",
-  "Additional Services",
-] as const;
 
 function isValidEmail(email: string): boolean {
   const trimmed = email.trim();
@@ -251,6 +63,33 @@ function isValidPhone(phone: string): boolean {
 
 export function PackageBuilder() {
   const { lang } = useLanguage();
+  const { packages, additionalServices } = useSiteContent();
+  const BUILDER_PACKAGES: BuilderPackageItem[] = useMemo(() => {
+    const birrValue = (price: string) => Number(price.replace(/[^\d]/g, "")) || 0;
+    return [
+      ...packages.map((pkg) => ({
+        id: pkg.id,
+        name: pkg.name,
+        category: pkg.category,
+        price: pkg.price,
+        priceNumber: birrValue(pkg.price),
+        subtitle: pkg.description,
+        bullets: pkg.features.slice(0, 3),
+        image: pkg.gallery[0] || "/images/hero/hero-1.jpg",
+      })),
+      ...additionalServices.map((service) => ({
+        id: service.id,
+        name: service.name,
+        category: "Additional Services",
+        price: service.price,
+        priceNumber: birrValue(service.price),
+        subtitle: service.description,
+        bullets: [service.description],
+        image: "/images/commercial/commercial-1.jpg",
+      })),
+    ];
+  }, [packages, additionalServices]);
+  const CATEGORIES = Array.from(new Set(BUILDER_PACKAGES.map((pkg) => pkg.category)));
   const [selectedIds, setSelectedIds] = useState<string[]>([
     "studio-landscape-premium",
   ]);
@@ -294,7 +133,7 @@ export function PackageBuilder() {
 
   const selectedPackages = useMemo(
     () => BUILDER_PACKAGES.filter((p) => selectedIds.includes(p.id)),
-    [selectedIds]
+    [BUILDER_PACKAGES, selectedIds]
   );
 
   const totalInvestment = useMemo(

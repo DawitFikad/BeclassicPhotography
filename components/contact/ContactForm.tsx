@@ -9,7 +9,7 @@ import {
   Layers,
   AlertCircle,
 } from "lucide-react";
-import { packages, additionalServices } from "@/lib/data";
+import { useSiteContent } from "@/components/providers/SiteContentProvider";
 import { Toast, type ToastMessage } from "@/components/ui/Toast";
 import { useLanguage } from "@/components/providers/LanguageProvider";
 
@@ -63,6 +63,7 @@ export function ContactForm({ prefilledService = "" }: ContactFormProps) {
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const { t, lang } = useLanguage();
+  const { packages, additionalServices } = useSiteContent();
 
   // All available packages & add-ons
   const allSelectableOptions: SelectableOption[] = useMemo(() => {
@@ -83,7 +84,7 @@ export function ContactForm({ prefilledService = "" }: ContactFormProps) {
     }));
 
     return [...pkgItems, ...addonItems];
-  }, []);
+  }, [packages, additionalServices]);
 
   // Multi-package selection state
   const [selectedPackageNames, setSelectedPackageNames] = useState<string[]>([]);

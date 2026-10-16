@@ -4,29 +4,27 @@ import { useMemo, useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { X, ChevronLeft, ChevronRight, ZoomIn, Eye, Grid3X3 } from "lucide-react";
-import {
-  galleryItems,
-  categories,
-  type GalleryCategory,
-} from "@/lib/data";
+import { useSiteContent } from "@/components/providers/SiteContentProvider";
 import { useLanguage } from "@/components/providers/LanguageProvider";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import AccordionGallery from "@/components/ui/AccordionGallery";
 
-type Filter = "All" | GalleryCategory;
+type Filter = string;
 
 export function Gallery() {
   const [filter, setFilter] = useState<Filter>("All");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const { t } = useLanguage();
   const { theme } = useTheme();
+  const { galleryItems, galleryCategories } = useSiteContent();
+  const categories = ["All", ...galleryCategories.map((category) => category.name)];
 
   const filtered = useMemo(
     () =>
       filter === "All"
         ? galleryItems
         : galleryItems.filter((item) => item.category === filter),
-    [filter]
+    [filter, galleryItems]
   );
 
   // Map to AccordionGallery items format (curated top frames for active filter)
@@ -40,7 +38,7 @@ export function Gallery() {
     [filtered]
   );
 
-  const categoryLabels: Record<Filter, string> = {
+  const categoryLabels: Record<string, string> = {
     All: t.gallery.categories.all,
     Wedding: t.gallery.categories.wedding,
     Commercial: t.gallery.categories.commercial,
@@ -106,7 +104,7 @@ export function Gallery() {
                   : "border border-ink-700/80 text-ink-300 hover:border-gold-400/60 hover:text-gold-300 hover:bg-gold-400/5"
               }`}
             >
-              {categoryLabels[cat]}
+            {categoryLabels[cat] || cat}
             </motion.button>
           );
         })}
