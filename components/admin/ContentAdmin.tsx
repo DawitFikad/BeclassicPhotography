@@ -33,6 +33,8 @@ export function ContentAdmin() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [password, setPassword] = useState("");
+  const [recoveryMode, setRecoveryMode] = useState(false);
   const [tab, setTab] = useState<Tab>("packages");
   const [rows, setRows] = useState<Row[]>([]);
   const [packageCategories, setPackageCategories] = useState<Row[]>([]);
@@ -65,6 +67,7 @@ export function ContentAdmin() {
   };
 
   useEffect(() => {
+    setRecoveryMode(new URLSearchParams(window.location.hash.slice(1)).get("type") === "recovery");
     supabase.auth.getSession().then(({ data }) => {
       const currentEmail = data.session?.user.email?.toLowerCase() || null;
       if (currentEmail && currentEmail !== ADMIN_EMAIL) {
@@ -89,17 +92,44 @@ export function ContentAdmin() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, userEmail]);
 
-  const sendLoginLink = async (event: FormEvent) => {
+  const signIn = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setError("");
     setMessage("");
-    const { error: authError } = await supabase.auth.signInWithOtp({
+    const { error: authError } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
-      options: { shouldCreateUser: true, emailRedirectTo: `${window.location.origin}/admin` },
+      password,
     });
     if (authError) setError(authError.message);
-    else setMessage("If this email is enabled in Supabase Auth, a sign-in link is on its way.");
+    setBusy(false);
+  };
+
+  const sendPasswordReset = async () => {
+    setBusy(true);
+    setError("");
+    setMessage("");
+    const { error: authError } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: `${window.location.origin}/admin`,
+    });
+    if (authError) setError(authError.message);
+    else setMessage("If this email is registered, a password reset link is on its way.");
+    setBusy(false);
+  };
+
+  const updatePassword = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    setMessage("");
+    const { error: authError } = await supabase.auth.updateUser({ password });
+    if (authError) setError(authError.message);
+    else {
+      setPassword("");
+      setRecoveryMode(false);
+      window.history.replaceState(null, "", window.location.pathname);
+      setMessage("Password updated. You are now signed in.");
+    }
     setBusy(false);
   };
 
@@ -231,12 +261,20 @@ export function ContentAdmin() {
         <div className="rounded-3xl border border-border bg-surface p-8 shadow-xl">
           <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-gold-400">Beclassic Photography</p>
           <h1 className="mb-3 font-display text-3xl font-bold text-ink-50">Content admin</h1>
-          <p className="mb-6 text-sm leading-relaxed text-ink-400">Sign in with the authorized admin email to manage packages and gallery content.</p>
-          <form onSubmit={sendLoginLink} className="space-y-4">
+          <p className="mb-6 text-sm leading-relaxed text-ink-400">Sign in with the authorized admin email and password to manage packages and gallery content.</p>
+          {recoveryMode ? <form onSubmit={updatePassword} className="space-y-4">
+            <label className={labelClass} htmlFor="admin-password">New password</label>
+            <input id="admin-password" type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(event) => setPassword(event.target.value)} className={inputClass} />
+            <button disabled={busy} className="w-full rounded-xl bg-gold-400 px-5 py-3 font-bold text-ink-950 disabled:opacity-50">{busy ? "Updating…" : "Set new password"}</button>
+          </form> : <form onSubmit={signIn} className="space-y-4">
             <label className={labelClass} htmlFor="admin-email">Admin email</label>
             <input id="admin-email" type="email" autoComplete="email" required value={email} readOnly className={`${inputClass} opacity-80`} />
-            <button disabled={busy} className="w-full rounded-xl bg-gold-400 px-5 py-3 font-bold text-ink-950 disabled:opacity-50">{busy ? "Sending…" : "Email me a sign-in link"}</button>
+            <label className={labelClass} htmlFor="admin-password">Password</label>
+            <input id="admin-password" type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} className={inputClass} />
+            <button disabled={busy} className="w-full rounded-xl bg-gold-400 px-5 py-3 font-bold text-ink-950 disabled:opacity-50">{busy ? "Signing in…" : "Sign in"}</button>
+            <button type="button" disabled={busy} onClick={() => void sendPasswordReset()} className="w-full text-sm text-gold-300 hover:text-gold-200 disabled:opacity-50">Forgot password? Email me a reset link</button>
           </form>
+          }
           {message && <p className="mt-4 text-sm text-emerald-400">{message}</p>}
           {error && <p className="mt-4 text-sm text-rose-400">{error}</p>}
         </div>
