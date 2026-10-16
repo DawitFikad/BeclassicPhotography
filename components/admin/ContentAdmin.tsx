@@ -123,12 +123,15 @@ export function ContentAdmin() {
     setMessage("");
     const { error: authError } = await supabase.auth.signInWithOtp({
       email: email.trim().toLowerCase(),
-      options: { shouldCreateUser: false },
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: `${window.location.origin}/admin`,
+      },
     });
     if (authError) setError(authError.message);
     else {
       setAuthPhase("code");
-      setMessage("A verification code has been sent to the admin email.");
+      setMessage("Check the admin email. Click the sign-in link if one was sent, or enter the six-digit code below. Both continue to the password step.");
     }
     setBusy(false);
   };
@@ -322,13 +325,13 @@ export function ContentAdmin() {
         <div className="rounded-3xl border border-border bg-surface p-8 shadow-xl">
           <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-gold-400">Beclassic Photography</p>
           <h1 className="mb-3 font-display text-3xl font-bold text-ink-50">Content admin</h1>
-          <p className="mb-6 text-sm leading-relaxed text-ink-400">Verify the admin email with a one-time code, then enter the password. Both are required for each admin login.</p>
+          <p className="mb-6 text-sm leading-relaxed text-ink-400">Verify the admin email using the sign-in link or code sent to the inbox, then enter the password. Both are required for each admin login.</p>
           <p className="mb-4 text-xs text-ink-500">Admin email: {email}</p>
           {authPhase === "email" && <form onSubmit={sendLoginCode} className="space-y-4">
             <button disabled={busy} className="w-full rounded-xl bg-gold-400 px-5 py-3 font-bold text-ink-950 disabled:opacity-50">{busy ? "Sending code…" : "Email me a login code"}</button>
           </form>}
           {authPhase === "code" && <form onSubmit={verifyLoginCode} className="space-y-4">
-            <label className={labelClass} htmlFor="admin-code">Email verification code</label>
+            <label className={labelClass} htmlFor="admin-code">Email verification code (if the email contains one)</label>
             <input id="admin-code" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))} className={inputClass} />
             <button disabled={busy} className="w-full rounded-xl bg-gold-400 px-5 py-3 font-bold text-ink-950 disabled:opacity-50">{busy ? "Verifying…" : "Verify code"}</button>
             <button type="button" disabled={busy} onClick={() => { setCode(""); setAuthPhase("email"); }} className="w-full text-sm text-gold-300">Send a new code</button>
