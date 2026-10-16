@@ -99,6 +99,12 @@ export function Navbar() {
       >
         {t.nav.bookNow}
       </Link>
+      <Link
+        href="/admin"
+        className="w-full text-center rounded-xl border border-gold-400/40 px-4 py-3 text-sm font-semibold text-current hover:border-gold-400 hover:text-gold-300 transition-colors"
+      >
+        Admin Login
+      </Link>
     </div>
   );
 
@@ -187,6 +193,16 @@ export function Navbar() {
 
         {/* Controls and Book Button (Desktop lg+) */}
         <div className="hidden lg:flex items-center gap-2.5">
+          <Link
+            href="/admin"
+            className={`rounded-full border px-4 py-2 text-sm font-semibold transition-all duration-300 ${
+              isTopHome
+                ? "border-white/20 text-white hover:border-gold-400/80 hover:text-gold-300 bg-black/20 backdrop-blur-sm"
+                : "border-ink-700 text-ink-100 hover:border-gold-400/60 hover:text-gold-300"
+            }`}
+          >
+            Admin Login
+          </Link>
           <button
             onClick={toggleLang}
             aria-label={t.language.switch}
