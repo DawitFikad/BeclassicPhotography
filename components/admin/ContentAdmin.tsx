@@ -9,6 +9,7 @@ import { useSiteContent } from "@/components/providers/SiteContentProvider";
 const ADMIN_EMAIL = "classicphoto495@gmail.com";
 const BUCKET = "beclassic-gallery";
 type Tab = "packages" | "packageCategories" | "gallery" | "galleryCategories" | "services";
+type AuthPhase = "email" | "code" | "password";
 type Row = Record<string, any>;
 
 const inputClass = "w-full rounded-xl border border-ink-700 bg-ink-950/70 px-4 py-3 text-ink-100 outline-none focus:border-gold-400";
@@ -34,7 +35,10 @@ export function ContentAdmin() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [password, setPassword] = useState("");
-  const [recoveryMode, setRecoveryMode] = useState(false);
+  const [code, setCode] = useState("");
+  const [otpAccessToken, setOtpAccessToken] = useState<string | null>(null);
+  const [authPhase, setAuthPhase] = useState<AuthPhase>("email");
+  const [settingPassword, setSettingPassword] = useState(false);
   const [tab, setTab] = useState<Tab>("packages");
   const [rows, setRows] = useState<Row[]>([]);
   const [packageCategories, setPackageCategories] = useState<Row[]>([]);
@@ -67,21 +71,41 @@ export function ContentAdmin() {
   };
 
   useEffect(() => {
-    setRecoveryMode(new URLSearchParams(window.location.hash.slice(1)).get("type") === "recovery");
-    supabase.auth.getSession().then(({ data }) => {
-      const currentEmail = data.session?.user.email?.toLowerCase() || null;
-      if (currentEmail && currentEmail !== ADMIN_EMAIL) {
-        supabase.auth.signOut();
-        setError("This account does not have admin access.");
-      } else setUserEmail(currentEmail);
-    });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const syncSession = async (session: { access_token: string; user: { email?: string } } | null) => {
       const currentEmail = session?.user.email?.toLowerCase() || null;
-      if (currentEmail && currentEmail !== ADMIN_EMAIL) {
-        setError("This account does not have admin access.");
-        void supabase.auth.signOut();
+      if (!session || !currentEmail) {
         setUserEmail(null);
-      } else setUserEmail(currentEmail);
+        setOtpAccessToken(null);
+        setAuthPhase("email");
+        return;
+      }
+      if (currentEmail !== ADMIN_EMAIL) {
+        setError("This account does not have admin access.");
+        await supabase.auth.signOut({ scope: "local" });
+        setUserEmail(null);
+        return;
+      }
+
+      const { data: access } = await supabase.auth.getClaims(session.access_token);
+      const methods = (access?.claims?.amr as { method?: string }[] | undefined) || [];
+      if (methods.some((method) => method.method === "otp")) {
+        setOtpAccessToken(session.access_token);
+        setAuthPhase("password");
+        setUserEmail(null);
+        return;
+      }
+
+      const { data: verified } = await supabase.rpc("is_admin_login_verified");
+      if (verified === true) setUserEmail(currentEmail);
+      else {
+        setUserEmail(null);
+        setAuthPhase("email");
+      }
+    };
+
+    supabase.auth.getSession().then(({ data }) => void syncSession(data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      void syncSession(session);
     });
     return () => listener.subscription.unsubscribe();
   }, []);
@@ -92,43 +116,80 @@ export function ContentAdmin() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, userEmail]);
 
-  const signIn = async (event: FormEvent) => {
+  const sendLoginCode = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setError("");
     setMessage("");
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    const { error: authError } = await supabase.auth.signInWithOtp({
       email: email.trim().toLowerCase(),
-      password,
+      options: { shouldCreateUser: false },
     });
-    if (authError) setError(authError.message);
-    setBusy(false);
-  };
-
-  const sendPasswordReset = async () => {
-    setBusy(true);
-    setError("");
-    setMessage("");
-    const { error: authError } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-      redirectTo: `${window.location.origin}/admin`,
-    });
-    if (authError) setError(authError.message);
-    else setMessage("If this email is registered, a password reset link is on its way.");
-    setBusy(false);
-  };
-
-  const updatePassword = async (event: FormEvent) => {
-    event.preventDefault();
-    setBusy(true);
-    setError("");
-    setMessage("");
-    const { error: authError } = await supabase.auth.updateUser({ password });
     if (authError) setError(authError.message);
     else {
-      setPassword("");
-      setRecoveryMode(false);
-      window.history.replaceState(null, "", window.location.pathname);
-      setMessage("Password updated. You are now signed in.");
+      setAuthPhase("code");
+      setMessage("A verification code has been sent to the admin email.");
+    }
+    setBusy(false);
+  };
+
+  const verifyLoginCode = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    const { data, error: authError } = await supabase.auth.verifyOtp({
+      email: email.trim().toLowerCase(),
+      token: code.trim(),
+      type: "email",
+    });
+    if (authError) setError(authError.message);
+    else {
+      setOtpAccessToken(data.session?.access_token || null);
+      setAuthPhase("password");
+      setMessage("Email verified. Enter your password to finish signing in.");
+    }
+    setBusy(false);
+  };
+
+  const finishAdminLogin = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!otpAccessToken) {
+      setError("Verify the email code again to continue.");
+      setAuthPhase("email");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setMessage("");
+
+    if (settingPassword) {
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      if (updateError) {
+        setError(updateError.message);
+        setBusy(false);
+        return;
+      }
+    }
+
+    const { data: authData, error: authError } = await supabase.functions.invoke("complete-admin-login", {
+      body: { email: email.trim().toLowerCase(), password },
+    });
+    if (authError) setError(authError.message);
+    else if (!authData?.access_token || !authData?.refresh_token) setError("Could not finish the secure admin login.");
+    else {
+      await supabase.auth.signOut({ scope: "local" });
+      const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+        access_token: authData.access_token,
+        refresh_token: authData.refresh_token,
+      });
+      if (sessionError) setError(sessionError.message);
+      else {
+        setPassword("");
+        setOtpAccessToken(null);
+        const { data: verified } = await supabase.rpc("is_admin_login_verified");
+        if (verified === true) setUserEmail(ADMIN_EMAIL);
+        else setError("The two-step login could not be verified. Request a new email code and try again.");
+      }
     }
     setBusy(false);
   };
@@ -261,20 +322,23 @@ export function ContentAdmin() {
         <div className="rounded-3xl border border-border bg-surface p-8 shadow-xl">
           <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-gold-400">Beclassic Photography</p>
           <h1 className="mb-3 font-display text-3xl font-bold text-ink-50">Content admin</h1>
-          <p className="mb-6 text-sm leading-relaxed text-ink-400">Sign in with the authorized admin email and password to manage packages and gallery content.</p>
-          {recoveryMode ? <form onSubmit={updatePassword} className="space-y-4">
-            <label className={labelClass} htmlFor="admin-password">New password</label>
-            <input id="admin-password" type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(event) => setPassword(event.target.value)} className={inputClass} />
-            <button disabled={busy} className="w-full rounded-xl bg-gold-400 px-5 py-3 font-bold text-ink-950 disabled:opacity-50">{busy ? "Updating…" : "Set new password"}</button>
-          </form> : <form onSubmit={signIn} className="space-y-4">
-            <label className={labelClass} htmlFor="admin-email">Admin email</label>
-            <input id="admin-email" type="email" autoComplete="email" required value={email} readOnly className={`${inputClass} opacity-80`} />
-            <label className={labelClass} htmlFor="admin-password">Password</label>
-            <input id="admin-password" type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} className={inputClass} />
-            <button disabled={busy} className="w-full rounded-xl bg-gold-400 px-5 py-3 font-bold text-ink-950 disabled:opacity-50">{busy ? "Signing in…" : "Sign in"}</button>
-            <button type="button" disabled={busy} onClick={() => void sendPasswordReset()} className="w-full text-sm text-gold-300 hover:text-gold-200 disabled:opacity-50">Forgot password? Email me a reset link</button>
-          </form>
-          }
+          <p className="mb-6 text-sm leading-relaxed text-ink-400">Verify the admin email with a one-time code, then enter the password. Both are required for each admin login.</p>
+          <p className="mb-4 text-xs text-ink-500">Admin email: {email}</p>
+          {authPhase === "email" && <form onSubmit={sendLoginCode} className="space-y-4">
+            <button disabled={busy} className="w-full rounded-xl bg-gold-400 px-5 py-3 font-bold text-ink-950 disabled:opacity-50">{busy ? "Sending code…" : "Email me a login code"}</button>
+          </form>}
+          {authPhase === "code" && <form onSubmit={verifyLoginCode} className="space-y-4">
+            <label className={labelClass} htmlFor="admin-code">Email verification code</label>
+            <input id="admin-code" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))} className={inputClass} />
+            <button disabled={busy} className="w-full rounded-xl bg-gold-400 px-5 py-3 font-bold text-ink-950 disabled:opacity-50">{busy ? "Verifying…" : "Verify code"}</button>
+            <button type="button" disabled={busy} onClick={() => { setCode(""); setAuthPhase("email"); }} className="w-full text-sm text-gold-300">Send a new code</button>
+          </form>}
+          {authPhase === "password" && <form onSubmit={finishAdminLogin} className="space-y-4">
+            <label className={labelClass} htmlFor="admin-password">{settingPassword ? "Create a new admin password" : "Admin password"}</label>
+            <input id="admin-password" type="password" autoComplete={settingPassword ? "new-password" : "current-password"} minLength={8} required value={password} onChange={(event) => setPassword(event.target.value)} className={inputClass} />
+            <button disabled={busy} className="w-full rounded-xl bg-gold-400 px-5 py-3 font-bold text-ink-950 disabled:opacity-50">{busy ? "Checking…" : settingPassword ? "Set password and sign in" : "Sign in securely"}</button>
+            <button type="button" disabled={busy} onClick={() => setSettingPassword((value) => !value)} className="w-full text-sm text-gold-300">{settingPassword ? "I already have a password" : "First time? Create or reset my password"}</button>
+          </form>}
           {message && <p className="mt-4 text-sm text-emerald-400">{message}</p>}
           {error && <p className="mt-4 text-sm text-rose-400">{error}</p>}
         </div>
