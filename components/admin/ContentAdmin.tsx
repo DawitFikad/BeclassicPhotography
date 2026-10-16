@@ -9,7 +9,7 @@ import { useSiteContent } from "@/components/providers/SiteContentProvider";
 const ADMIN_EMAIL = "classicphoto495@gmail.com";
 const BUCKET = "beclassic-gallery";
 type Tab = "packages" | "packageCategories" | "gallery" | "galleryCategories" | "services";
-type AuthPhase = "email" | "code" | "password" | "authenticatorLogin" | "authenticatorCode";
+type AuthPhase = "google" | "setupAuthenticator" | "authenticatorCode";
 type Row = Record<string, any>;
 
 const inputClass = "w-full rounded-xl border border-ink-700 bg-ink-950/70 px-4 py-3 text-ink-100 outline-none focus:border-gold-400";
@@ -30,12 +30,9 @@ function slug(value: string) {
 export function ContentAdmin() {
   const { refresh } = useSiteContent();
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const email = ADMIN_EMAIL;
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [totpFactorId, setTotpFactorId] = useState<string | null>(null);
   const [totpChallengeId, setTotpChallengeId] = useState<string | null>(null);
@@ -44,9 +41,7 @@ export function ContentAdmin() {
   const [totpSetupFactorId, setTotpSetupFactorId] = useState<string | null>(null);
   const [hasTotpFactor, setHasTotpFactor] = useState(false);
   const [enrollingTotp, setEnrollingTotp] = useState(false);
-  const [otpAccessToken, setOtpAccessToken] = useState<string | null>(null);
-  const [authPhase, setAuthPhase] = useState<AuthPhase>("email");
-  const [settingPassword, setSettingPassword] = useState(false);
+  const [authPhase, setAuthPhase] = useState<AuthPhase>("google");
   const [tab, setTab] = useState<Tab>("packages");
   const [rows, setRows] = useState<Row[]>([]);
   const [packageCategories, setPackageCategories] = useState<Row[]>([]);
@@ -83,8 +78,7 @@ export function ContentAdmin() {
       const currentEmail = session?.user.email?.toLowerCase() || null;
       if (!session || !currentEmail) {
         setUserEmail(null);
-        setOtpAccessToken(null);
-        setAuthPhase("email");
+        setAuthPhase("google");
         return;
       }
       if (currentEmail !== ADMIN_EMAIL) {
@@ -97,26 +91,38 @@ export function ContentAdmin() {
       const { data: access } = await supabase.auth.getClaims(session.access_token);
       const methods = (access?.claims?.amr as { method?: string }[] | undefined) || [];
       const claimValues = access?.claims as Record<string, unknown> | undefined;
-      if (methods.some((method) => method.method === "otp")) {
-        setOtpAccessToken(session.access_token);
-        setAuthPhase("password");
-        setUserEmail(null);
-        return;
-      }
-
       if (
         claimValues?.aal === "aal2" &&
-        methods.some((method) => method.method === "password") &&
+        methods.some((method) => method.method === "oauth") &&
         methods.some((method) => method.method === "totp")
       ) {
         await supabase.functions.invoke("complete-admin-login", { body: { email: ADMIN_EMAIL } });
+        const { data: verified } = await supabase.rpc("is_admin_login_verified");
+        if (verified === true) {
+          setUserEmail(currentEmail);
+          setAuthPhase("google");
+          return;
+        }
       }
 
-      const { data: verified } = await supabase.rpc("is_admin_login_verified");
-      if (verified === true) setUserEmail(currentEmail);
-      else if (!methods.some((method) => method.method === "password")) {
-        setUserEmail(null);
-        setAuthPhase("email");
+      setUserEmail(null);
+      const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
+      if (factorsError) {
+        setError(factorsError.message);
+        return;
+      }
+      const factor = factors.totp.find((item) => item.status === "verified");
+      if (!factor) {
+        setAuthPhase("setupAuthenticator");
+        return;
+      }
+      const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({ factorId: factor.id });
+      if (challengeError) setError(challengeError.message);
+      else {
+        setTotpFactorId(factor.id);
+        setTotpChallengeId(challenge.id);
+        setAuthPhase("authenticatorCode");
+        setMessage("Enter the current code from your authenticator app.");
       }
     };
 
@@ -141,42 +147,18 @@ export function ContentAdmin() {
     });
   }, [userEmail]);
 
-  const startAuthenticatorLogin = async (event: FormEvent) => {
-    event.preventDefault();
+  const startGoogleLogin = async () => {
     setBusy(true);
     setError("");
     setMessage("");
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: ADMIN_EMAIL,
-      password,
+    const { error: signInError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/admin`,
+        queryParams: { hd: "gmail.com", prompt: "select_account" },
+      },
     });
-    if (signInError) {
-      setError(signInError.message);
-      setBusy(false);
-      return;
-    }
-    const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
-    const factor = factors?.totp.find((item) => item.status === "verified");
-    if (factorsError || !factor) {
-      setError(factorsError?.message || "No authenticator is set up yet. Sign in with email verification once, then enroll an authenticator below.");
-      await supabase.auth.signOut({ scope: "local" });
-      setPassword("");
-      setAuthPhase("email");
-      setBusy(false);
-      return;
-    }
-    const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({ factorId: factor.id });
-    if (challengeError) {
-      setError(challengeError.message);
-      await supabase.auth.signOut({ scope: "local" });
-      setPassword("");
-      setAuthPhase("email");
-    } else {
-      setTotpFactorId(factor.id);
-      setTotpChallengeId(challenge.id);
-      setAuthPhase("authenticatorCode");
-      setMessage("Enter the current code from your authenticator app.");
-    }
+    if (signInError) setError(signInError.message);
     setBusy(false);
   };
 
@@ -184,7 +166,7 @@ export function ContentAdmin() {
     event.preventDefault();
     if (!totpFactorId || !totpChallengeId) {
       setError("Start a new authenticator sign-in and try again.");
-      setAuthPhase("authenticatorLogin");
+      setAuthPhase("google");
       return;
     }
     setBusy(true);
@@ -204,9 +186,8 @@ export function ContentAdmin() {
         const { data: verified } = await supabase.rpc("is_admin_login_verified");
         if (verified) {
           setUserEmail(ADMIN_EMAIL);
-          setPassword("");
           setTotpCode("");
-          setMessage("Signed in securely with your authenticator app.");
+          setMessage("Signed in with Google and your authenticator app.");
         } else setError("Authenticator verification succeeded, but the admin session could not be confirmed. Please sign in again.");
       }
     }
@@ -256,87 +237,16 @@ export function ContentAdmin() {
       setTotpQrCode("");
       setTotpSecret("");
       setTotpCode("");
-      setMessage("Authenticator enabled. Future sign-ins use your password and app code, without an email code.");
-    }
-    setBusy(false);
-  };
-
-  const sendLoginCode = async (event: FormEvent) => {
-    event.preventDefault();
-    setBusy(true);
-    setError("");
-    setMessage("");
-    const { error: authError } = await supabase.auth.signInWithOtp({
-      email: email.trim().toLowerCase(),
-      options: {
-        shouldCreateUser: false,
-        emailRedirectTo: `${window.location.origin}/admin`,
-      },
-    });
-    if (authError) setError(authError.message);
-    else {
-      setAuthPhase("code");
-      setMessage("Check the admin email. Click the sign-in link if one was sent, or enter the six-digit code below. Both continue to the password step.");
-    }
-    setBusy(false);
-  };
-
-  const verifyLoginCode = async (event: FormEvent) => {
-    event.preventDefault();
-    setBusy(true);
-    setError("");
-    const { data, error: authError } = await supabase.auth.verifyOtp({
-      email: email.trim().toLowerCase(),
-      token: code.trim(),
-      type: "email",
-    });
-    if (authError) setError(authError.message);
-    else {
-      setOtpAccessToken(data.session?.access_token || null);
-      setAuthPhase("password");
-      setMessage("Email verified. Enter your password to finish signing in.");
-    }
-    setBusy(false);
-  };
-
-  const finishAdminLogin = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!otpAccessToken) {
-      setError("Verify the email code again to continue.");
-      setAuthPhase("email");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    setMessage("");
-
-    if (settingPassword) {
-      const { error: updateError } = await supabase.auth.updateUser({ password });
-      if (updateError) {
-        setError(updateError.message);
-        setBusy(false);
-        return;
-      }
-    }
-
-    const { data: authData, error: authError } = await supabase.functions.invoke("complete-admin-login", {
-      body: { email: email.trim().toLowerCase(), password },
-    });
-    if (authError) setError(authError.message);
-    else if (!authData?.access_token || !authData?.refresh_token) setError("Could not finish the secure admin login.");
-    else {
-      await supabase.auth.signOut({ scope: "local" });
-      const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-        access_token: authData.access_token,
-        refresh_token: authData.refresh_token,
+      setMessage("Authenticator enabled. Confirming your admin session…");
+      await supabase.auth.refreshSession();
+      const { error: sessionError } = await supabase.functions.invoke("complete-admin-login", {
+        body: { email: ADMIN_EMAIL },
       });
       if (sessionError) setError(sessionError.message);
       else {
-        setPassword("");
-        setOtpAccessToken(null);
         const { data: verified } = await supabase.rpc("is_admin_login_verified");
         if (verified === true) setUserEmail(ADMIN_EMAIL);
-        else setError("The two-step login could not be verified. Request a new email code and try again.");
+        else setError("Authenticator setup succeeded, but the admin session could not be confirmed. Sign in again.");
       }
     }
     setBusy(false);
@@ -470,35 +380,24 @@ export function ContentAdmin() {
         <div className="rounded-3xl border border-border bg-surface p-8 shadow-xl">
           <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-gold-400">Beclassic Photography</p>
           <h1 className="mb-3 font-display text-3xl font-bold text-ink-50">Content admin</h1>
-          <p className="mb-6 text-sm leading-relaxed text-ink-400">Sign in with your admin password and authenticator app. Email verification is available to set up or recover the authenticator.</p>
-          <p className="mb-4 text-xs text-ink-500">Admin email: {email}</p>
-          {authPhase === "email" && <form onSubmit={sendLoginCode} className="space-y-4">
-            <button disabled={busy} className="w-full rounded-xl bg-gold-400 px-5 py-3 font-bold text-ink-950 disabled:opacity-50">{busy ? "Sending code…" : "Email me a login code"}</button>
-            <button type="button" disabled={busy} onClick={() => { setError(""); setAuthPhase("authenticatorLogin"); }} className="w-full rounded-xl border border-border px-5 py-3 text-sm font-semibold text-ink-200 hover:border-gold-400/60">Sign in with password and authenticator</button>
-          </form>}
-          {authPhase === "code" && <form onSubmit={verifyLoginCode} className="space-y-4">
-            <label className={labelClass} htmlFor="admin-code">Email verification code (if the email contains one)</label>
-            <input id="admin-code" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))} className={inputClass} />
-            <button disabled={busy} className="w-full rounded-xl bg-gold-400 px-5 py-3 font-bold text-ink-950 disabled:opacity-50">{busy ? "Verifying…" : "Verify code"}</button>
-            <button type="button" disabled={busy} onClick={() => { setCode(""); setAuthPhase("email"); }} className="w-full text-sm text-gold-300">Send a new code</button>
-          </form>}
-          {authPhase === "password" && <form onSubmit={finishAdminLogin} className="space-y-4">
-            <label className={labelClass} htmlFor="admin-password">{settingPassword ? "Create a new admin password" : "Admin password"}</label>
-            <input id="admin-password" type="password" autoComplete={settingPassword ? "new-password" : "current-password"} minLength={8} required value={password} onChange={(event) => setPassword(event.target.value)} className={inputClass} />
-            <button disabled={busy} className="w-full rounded-xl bg-gold-400 px-5 py-3 font-bold text-ink-950 disabled:opacity-50">{busy ? "Checking…" : settingPassword ? "Set password and sign in" : "Sign in securely"}</button>
-            <button type="button" disabled={busy} onClick={() => setSettingPassword((value) => !value)} className="w-full text-sm text-gold-300">{settingPassword ? "I already have a password" : "First time? Create or reset my password"}</button>
-          </form>}
-          {authPhase === "authenticatorLogin" && <form onSubmit={startAuthenticatorLogin} className="space-y-4">
-            <label className={labelClass} htmlFor="admin-password-totp">Admin password</label>
-            <input id="admin-password-totp" type="password" autoComplete="current-password" minLength={8} required value={password} onChange={(event) => setPassword(event.target.value)} className={inputClass} />
-            <button disabled={busy} className="w-full rounded-xl bg-gold-400 px-5 py-3 font-bold text-ink-950 disabled:opacity-50">{busy ? "Checking…" : "Continue to authenticator code"}</button>
-            <button type="button" disabled={busy} onClick={() => { setPassword(""); setAuthPhase("email"); }} className="w-full text-sm text-gold-300">Back to email verification</button>
+          <p className="mb-6 text-sm leading-relaxed text-ink-400">Sign in with the admin Google account, then confirm with your authenticator app. No password or email code is used.</p>
+          {authPhase === "google" && <button type="button" disabled={busy} onClick={() => void startGoogleLogin()} className="w-full rounded-xl bg-gold-400 px-5 py-3 font-bold text-ink-950 disabled:opacity-50">{busy ? "Opening Google…" : "Continue with Google"}</button>}
+          {authPhase === "setupAuthenticator" && !enrollingTotp && <div className="space-y-4">
+            <p className="text-sm text-ink-300">First sign-in: set up your authenticator app to secure this admin account.</p>
+            <button type="button" disabled={busy} onClick={() => void beginTotpEnrollment()} className="w-full rounded-xl bg-gold-400 px-5 py-3 font-bold text-ink-950 disabled:opacity-50">{busy ? "Preparing…" : "Set up authenticator"}</button>
+          </div>}
+          {enrollingTotp && <form onSubmit={verifyTotpEnrollment} className="space-y-4">
+            <Image src={totpQrCode} alt="Authenticator setup QR code" width={180} height={180} unoptimized className="rounded-xl bg-white p-2" />
+            <p className="text-sm text-ink-300">Scan this QR code in Google Authenticator, Authy, or another authenticator app. You can also enter this setup key manually:</p>
+            <code className="block break-all rounded-xl bg-ink-950 p-3 text-sm text-gold-300">{totpSecret}</code>
+            <label className="block"><span className={labelClass}>6-digit code from the app</span><input type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={totpCode} onChange={(event) => setTotpCode(event.target.value.replace(/\D/g, "").slice(0, 6))} className={inputClass} /></label>
+            <button disabled={busy} className="w-full rounded-xl bg-gold-400 px-5 py-3 font-bold text-ink-950 disabled:opacity-50">{busy ? "Verifying…" : "Verify and enable"}</button>
           </form>}
           {authPhase === "authenticatorCode" && <form onSubmit={verifyAuthenticatorLogin} className="space-y-4">
             <label className={labelClass} htmlFor="admin-totp-code">Authenticator app code</label>
             <input id="admin-totp-code" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={totpCode} onChange={(event) => setTotpCode(event.target.value.replace(/\D/g, "").slice(0, 6))} className={inputClass} />
             <button disabled={busy} className="w-full rounded-xl bg-gold-400 px-5 py-3 font-bold text-ink-950 disabled:opacity-50">{busy ? "Verifying…" : "Verify and sign in"}</button>
-            <button type="button" disabled={busy} onClick={() => { setPassword(""); setTotpCode(""); setTotpFactorId(null); setTotpChallengeId(null); void supabase.auth.signOut({ scope: "local" }); setAuthPhase("email"); }} className="w-full text-sm text-gold-300">Cancel sign-in</button>
+            <button type="button" disabled={busy} onClick={() => { setTotpCode(""); setTotpFactorId(null); setTotpChallengeId(null); void supabase.auth.signOut({ scope: "local" }); setAuthPhase("google"); }} className="w-full text-sm text-gold-300">Cancel sign-in</button>
           </form>}
           {message && <p className="mt-4 text-sm text-emerald-400">{message}</p>}
           {error && <p className="mt-4 text-sm text-rose-400">{error}</p>}
@@ -526,7 +425,7 @@ export function ContentAdmin() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className="font-display text-lg font-bold text-ink-50">Authenticator security</h2>
-            <p className="mt-1 text-sm text-ink-400">{hasTotpFactor ? "Authenticator sign-in is ready. Use your password and app code; no email is sent." : "Set up an authenticator app so future logins do not depend on email delivery."}</p>
+            <p className="mt-1 text-sm text-ink-400">{hasTotpFactor ? "Google sign-in plus your authenticator code is required. No password or email code is used." : "Set up an authenticator app so every admin login is verified."}</p>
           </div>
           {!hasTotpFactor && !enrollingTotp && <button disabled={busy} onClick={() => void beginTotpEnrollment()} className="rounded-full bg-gold-400 px-4 py-2 text-sm font-bold text-ink-950 disabled:opacity-50">{busy ? "Preparing…" : "Set up authenticator"}</button>}
         </div>
